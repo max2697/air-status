@@ -1,0 +1,13 @@
+# Flight history and downloaded map data
+*.json
+*.jsonl
+*.geojson
+history/
+mapdata/
+
+# Python / IDE
+.venv/
+__pycache__/
+.idea/
+*.egg-info/
+.pytest_cache/
