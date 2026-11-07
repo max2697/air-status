@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Optional
 
-from air_status.flightlog import ChangeLog
+from air_status.flightlog import ChangeLog, safe_part
 from air_status.models import Airport, FlightStatus
 from air_status.providers.base import Provider
 
@@ -80,7 +80,7 @@ class AmericanHistory(ChangeLog):
         airports = reading.get("airports") or {}
         frm = (airports.get(f["origin"]) or {}).get("iata") or f["origin"]
         to = (airports.get(f["destination"]) or {}).get("iata") or f["destination"]
-        return self.directory / f"{day}_{f.get('flightNumber') or 'unknown'}_{frm}-{to}{self.suffix}"
+        return self.flight_file(day, f.get("flightNumber"), f"{safe_part(frm)}-{safe_part(to)}")
 
     def to_record(self, reading: Raw) -> Raw:
         return reading  # fetch() already leaves out the device and timestamps that change every call

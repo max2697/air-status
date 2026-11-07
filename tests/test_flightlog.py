@@ -54,3 +54,18 @@ def test_private_and_noise_fields_not_saved(tmp_path, gogo_response):
     for value in ("10.0.0.2", "02:00:00:00:00:01", "device_iid", "trivia"):
         assert value not in text
     assert "systemInfo.flightPhase" in text  # raw Gogo fields are kept
+
+
+def test_history_file_names_stay_in_folder(tmp_path, gogo_response):
+    from air_status.flightlog import safe_part
+    from air_status.providers.aircanada import AirCanada
+
+    assert safe_part("../../etc/passwd") == "etcpasswd"
+    assert safe_part("..") == "unknown"
+    assert safe_part(None) == "unknown"
+    f = gogo_response["flightInfo"]
+    f["flightNumberInfo"] = "../../evil"
+    f["departureAirportCodeIata"] = "/tmp"
+    path = AirCanada().history(tmp_path).path_for(gogo_response)
+    assert path.parent == tmp_path
+    assert path.name == "2026-01-15_evil_tmp-YYZ.jsonl"

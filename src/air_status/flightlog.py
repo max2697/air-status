@@ -8,6 +8,7 @@ no changes are not written.
 """
 
 import json
+import re
 from abc import ABC, abstractmethod
 from collections import deque
 from collections.abc import Iterator
@@ -41,6 +42,12 @@ def unflatten(flat: Flat) -> dict[str, Any]:
     return out
 
 
+def safe_part(value: Any, limit: int = 24) -> str:
+    """Filename-safe piece from portal data (letters, digits, - and . only), never empty."""
+    cleaned = re.sub(r"[^A-Za-z0-9.-]", "", str(value or "")).strip(".")[:limit]
+    return cleaned or "unknown"
+
+
 class FlightHistory(ABC):
     """History of one provider's flights in one directory, one file per flight."""
 
@@ -63,6 +70,10 @@ class FlightHistory(ABC):
 
     def files(self) -> list[Path]:
         return sorted(self.directory.glob(f"*{self.suffix}"))
+
+    def flight_file(self, *parts: Any) -> Path:
+        """`directory/part1_part2_….jsonl`, with every part cleaned so portal data can't escape the folder."""
+        return self.directory / ("_".join(safe_part(p) for p in parts) + self.suffix)
 
     def track(self, reading: Any) -> list[FlightStatus]:
         """Saved history of the flight this reading belongs to (empty if none)."""

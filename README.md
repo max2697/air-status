@@ -4,6 +4,10 @@ Live flight status in the terminal while you're on board, read from the airline'
 in-flight Wi-Fi portal: altitude, speed, ETA, a Braille map of the route, and a
 saved history of every flight.
 
+![air-status live view: route bar, flight stats and a Braille map of the flown path](docs/screenshot.png)
+
+<sub>Made-up flight. Regenerate with `.venv/bin/python scripts/screenshot.py`.</sub>
+
 ## Setup
 
 ```bash

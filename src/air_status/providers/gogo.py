@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
-from air_status.flightlog import ChangeLog
+from air_status.flightlog import ChangeLog, safe_part
 from air_status.models import Airport, FlightStatus
 from air_status.providers.base import Provider
 
@@ -45,7 +45,7 @@ class GogoHistory(ChangeLog):
         day = (f.get("departureTime") or f["utcTime"])[:10]
         frm = f.get("departureAirportCodeIata") or f["departureAirportCode"]
         to = f.get("destinationAirportCodeIata") or f["destinationAirportCode"]
-        return self.directory / f"{day}_{f.get('flightNumberInfo') or 'unknown'}_{frm}-{to}{self.suffix}"
+        return self.flight_file(day, f.get("flightNumberInfo"), f"{safe_part(frm)}-{safe_part(to)}")
 
     def to_record(self, reading: Raw) -> Raw:
         record = {k: v for k, v in reading.items() if k not in NOT_SAVED["top"]}
