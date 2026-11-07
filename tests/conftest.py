@@ -2,7 +2,7 @@ import copy
 
 import pytest
 
-# Trimmed real response from the Gogo / Intelsat statusTray endpoint (Air Canada, AUS→YYZ)
+# Gogo / Intelsat statusTray response shape, with made-up flight values
 GOGO_RESPONSE = {
     "status": 200,
     "flightInfo": {

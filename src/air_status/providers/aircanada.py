@@ -6,3 +6,4 @@ class AirCanada(GogoProvider):
 
     id = "aircanada"
     name = "Air Canada"
+    airline_code = "ACA"

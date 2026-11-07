@@ -12,7 +12,7 @@ from typing import Optional
 from rich.text import Text
 
 from air_status.braille import Canvas
-from air_status.geo import LatLon, distance_km, great_circle
+from air_status.geo import LatLon, bearing_deg, distance_km, great_circle
 from air_status.models import FlightStatus
 
 SOURCE_URL = "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/v5.1.2/geojson/{}.geojson"
@@ -48,6 +48,24 @@ def load_layers(map_dir: Path) -> list[tuple[list[Path_], str, int]]:
             features = [f for f in features if f["properties"].get("scalerank", 9) <= MAX_LAKE_RANK]
         layers.append(([p for f in features for p in _paths(f["geometry"]["coordinates"])], style, prio))
     return layers
+
+
+PLANE_ARROWS = "↑↗→↘↓↙←↖"  # terminals can't rotate ✈, so the map points with an arrow
+
+
+def plane_glyph(dx: float, dy: float) -> str:
+    """Arrow for a direction on screen (dy grows downwards)."""
+    if not dx and not dy:
+        return "✈"
+    angle = math.degrees(math.atan2(dx, -dy)) % 360  # clockwise from screen-up
+    return PLANE_ARROWS[round(angle / 45) % 8]
+
+
+def heading_of(status: FlightStatus) -> float:
+    """Reported heading, else the direction towards the destination."""
+    if status.heading is not None:
+        return status.heading
+    return bearing_deg(status.latitude, status.longitude, status.destination.latitude, status.destination.longitude)
 
 
 MAX_RECORDED_GAP = 60  # seconds; longer gaps between saved points are drawn as estimated
@@ -179,5 +197,10 @@ class FlightMap:
             canvas.text(lx, cy, label, "bold white on red")
 
         x, y = project(*here)
-        canvas.text(int(x) // 2, int(y) // 4, "✈", "bold yellow")
+        # Step a little along the heading and see which way that goes on screen
+        h = math.radians(heading_of(status))
+        step = 0.1  # degrees
+        ahead_lon = status.longitude + step * math.sin(h) / max(0.01, math.cos(math.radians(status.latitude)))
+        ax, ay = project(status.latitude + step * math.cos(h), ahead_lon)
+        canvas.text(int(x) // 2, int(y) // 4, plane_glyph(ax - x, ay - y), "bold yellow")
         return canvas.to_text()

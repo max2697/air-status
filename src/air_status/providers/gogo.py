@@ -59,11 +59,20 @@ class GogoHistory(ChangeLog):
 
 class GogoProvider(Provider):
     url = "https://wifi.inflightinternet.com/abp/v2/statusTray"
+    airline_code: Optional[str] = None  # ICAO airline code in flightInfo, tells Gogo airlines apart
     update_interval = 10  # measured: the portal refreshes position every 10 s
 
     def fetch(self) -> Raw:
         with urllib.request.urlopen(self.url, timeout=10) as resp:
             return json.load(resp)["Response"]
+
+    def detect(self) -> bool:
+        try:
+            reading = self.fetch()
+            self.parse(reading)
+        except Exception:
+            return False
+        return self.airline_code is None or reading["flightInfo"].get("airlineCode") == self.airline_code
 
     def history(self, directory: Path) -> GogoHistory:
         return GogoHistory(directory, self)

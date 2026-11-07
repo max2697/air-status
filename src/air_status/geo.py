@@ -14,6 +14,14 @@ def distance_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return EARTH_RADIUS_KM * 2 * math.asin(math.sqrt(a))
 
 
+def bearing_deg(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Initial direction from point 1 to point 2, degrees clockwise from north (0–360)."""
+    p1, p2, dl = math.radians(lat1), math.radians(lat2), math.radians(lon2 - lon1)
+    y = math.sin(dl) * math.cos(p2)
+    x = math.cos(p1) * math.sin(p2) - math.sin(p1) * math.cos(p2) * math.cos(dl)
+    return math.degrees(math.atan2(y, x)) % 360
+
+
 def great_circle(lat1: float, lon1: float, lat2: float, lon2: float, n: int = 200) -> list[LatLon]:
     """n+1 evenly spaced (lat, lon) points along the shortest path between two places."""
     p1, l1, p2, l2 = map(math.radians, (lat1, lon1, lat2, lon2))

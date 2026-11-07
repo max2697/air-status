@@ -14,8 +14,9 @@ python3 -m venv .venv
 ## Use
 
 ```bash
-.venv/bin/air-status                     # live view (Air Canada), saves history
+.venv/bin/air-status                     # live view, airline detected from the Wi-Fi, saves history
 .venv/bin/air-status live -p aircanada --every 10
+.venv/bin/air-status live -p american     # American Airlines (Viasat aircraft)
 .venv/bin/air-status history             # list saved flights
 ```
 
@@ -28,6 +29,10 @@ Files go in the current folder (change with `--data-dir`):
   Air Canada (Gogo) stores the raw portal data as change-only JSON Lines: the
   first line is the full reading, later lines hold only the fields that changed.
   Your device's IP/MAC address is never saved.
+  American Airlines stores the Viasat flight feed plus the route's airport
+  locations (looked up once from the portal) in the same change-only format.
+  Its feed has no vertical speed, so climb/descent is worked out from the
+  altitude change over the last minute (and saved too).
 - `mapdata/` — map outlines from [Natural Earth](https://www.naturalearthdata.com/),
   downloaded on first run.
 
@@ -45,8 +50,13 @@ Providers live in `src/air_status/providers/`. A provider:
   decides how readings are written and read back. Reuse `ChangeLog` for
   change-only JSON Lines, or implement your own format.
 
+Auto-detect (the default, `-p auto`) asks every provider's portal at once via
+`detect()` and uses the first that returns flight data. The default `detect()`
+is "fetch and parse succeed"; override it when portals are shared (Gogo
+providers also check `airline_code`).
+
 Same Wi-Fi system as an existing provider (e.g. another Gogo/Intelsat airline):
-subclass it and set `id` and `name`, like `aircanada.py`. Then add an instance
+subclass it and set `id`, `name` and `airline_code`, like `aircanada.py`. Then add an instance
 to `PROVIDERS` in `providers/__init__.py`.
 
 ## Tests and lint

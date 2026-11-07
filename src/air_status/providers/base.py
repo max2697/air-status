@@ -25,6 +25,14 @@ class Provider(ABC):
     def parse(self, reading: Any) -> FlightStatus:
         """Convert a raw reading into FlightStatus."""
 
+    def detect(self) -> bool:
+        """True if this provider's portal is reachable and returns usable flight data."""
+        try:
+            self.parse(self.fetch())
+        except Exception:  # unreachable, wrong portal, unexpected format
+            return False
+        return True
+
     @abstractmethod
     def history(self, directory: Path) -> FlightHistory:
         """History store for this provider's flights inside `directory`."""

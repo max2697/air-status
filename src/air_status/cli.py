@@ -8,7 +8,7 @@ from rich.console import Console
 
 from air_status import __version__
 from air_status.flight_map import FlightMap
-from air_status.providers import DEFAULT_PROVIDER, PROVIDERS, get_provider
+from air_status.providers import AUTO, PROVIDERS, Provider, detect_provider, get_provider
 from air_status.tui import Poller, history_table, run_live
 
 
@@ -23,15 +23,28 @@ def build_parser() -> argparse.ArgumentParser:
     live.add_argument(
         "-p",
         "--provider",
-        choices=sorted(PROVIDERS),
-        default=DEFAULT_PROVIDER,
-        help=f"airline / Wi-Fi system (default: {DEFAULT_PROVIDER})",
+        choices=[AUTO, *sorted(PROVIDERS)],
+        default=AUTO,
+        help="airline / Wi-Fi system (default: auto, detected from the Wi-Fi you're on)",
     )
     live.add_argument(
         "--every", type=int, metavar="SECONDS", help="refresh interval (default: the provider's own update rate)"
     )
     sub.add_parser("history", help="list saved flights")
     return parser
+
+
+def pick_provider(provider_id: str) -> Optional[Provider]:
+    if provider_id != AUTO:
+        return get_provider(provider_id)
+    print("Looking for an in-flight Wi-Fi portal…", flush=True)
+    provider = detect_provider()
+    if provider is None:
+        names = ", ".join(p.name for p in PROVIDERS.values())
+        print(f"No in-flight Wi-Fi portal found (tried {names}). Connect to the plane's Wi-Fi or pick one with -p.")
+    else:
+        print(f"Detected {provider.name}.", flush=True)
+    return provider
 
 
 def main(argv: Optional[list[str]] = None) -> None:
@@ -46,7 +59,9 @@ def main(argv: Optional[list[str]] = None) -> None:
                 Console().print(table)
                 print(f"Files: {history_dir}")
         else:
-            provider = get_provider(getattr(args, "provider", DEFAULT_PROVIDER))
+            provider = pick_provider(getattr(args, "provider", AUTO))
+            if provider is None:
+                raise SystemExit(1)
             every = getattr(args, "every", None) or provider.update_interval
             poller = Poller(provider, provider.history(history_dir / provider.id), every)
             run_live(poller, FlightMap(args.data_dir / "mapdata"))

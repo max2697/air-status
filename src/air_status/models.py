@@ -25,6 +25,7 @@ class FlightStatus:
     altitude_ft: float
     ground_speed_mph: float
     vertical_speed: float = 0.0  # > 0 climbing, < 0 descending
+    heading: Optional[float] = None  # degrees clockwise from north, if the portal reports it
     aircraft_type: str = ""
     tail_number: str = ""
     departure_time: Optional[datetime] = None
