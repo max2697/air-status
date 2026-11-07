@@ -6,7 +6,7 @@ saved history of every flight.
 
 ![air-status live view: route bar, flight stats and a Braille map of the flown path](https://raw.githubusercontent.com/max2697/air-status/main/docs/screenshot.png)
 
-<sub>Made-up flight. Regenerate with `.venv/bin/python scripts/screenshot.py`.</sub>
+<sub>Made-up flight. Regenerate with `python scripts/screenshot.py`.</sub>
 
 ## Install
 
@@ -19,7 +19,8 @@ From a checkout, for development:
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install -e '.[dev]'
+source .venv/bin/activate
+pip install -e '.[dev]'
 ```
 
 ## Use
@@ -73,9 +74,9 @@ to `PROVIDERS` in `providers/__init__.py`.
 ## Tests and lint
 
 ```bash
-.venv/bin/pytest
-.venv/bin/ruff check .
-.venv/bin/ruff format .
+pytest
+ruff check .
+ruff format .
 ```
 
 GitHub Actions (`.github/workflows/ci.yml`) runs the same lint plus tests on

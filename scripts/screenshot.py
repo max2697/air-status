@@ -1,6 +1,6 @@
 """Make the README screenshot from a made-up flight (no real flight data, see CLAUDE.md).
 
-    .venv/bin/python scripts/screenshot.py            # writes docs/screenshot.png
+    python scripts/screenshot.py            # writes docs/screenshot.png (venv active)
 
 Rich draws the frame as SVG; Google Chrome (headless) turns it into the PNG.
 """
