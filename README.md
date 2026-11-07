@@ -25,10 +25,10 @@ python3 -m venv .venv
 ## Use
 
 ```bash
-.venv/bin/air-status                     # live view, airline detected from the Wi-Fi, saves history
-.venv/bin/air-status live -p aircanada --every 10
-.venv/bin/air-status live -p american     # American Airlines (Viasat aircraft)
-.venv/bin/air-status history             # list saved flights
+air-status                               # live view, airline detected from the Wi-Fi, saves history
+air-status live -p american              # pick the airline: aircanada, american
+air-status live -p aircanada --every 10  # refresh every 10 s
+air-status history                       # list saved flights
 ```
 
 Run it in a real terminal for the live full-screen view. In a plain output window
