@@ -4,11 +4,18 @@ Live flight status in the terminal while you're on board, read from the airline'
 in-flight Wi-Fi portal: altitude, speed, ETA, a Braille map of the route, and a
 saved history of every flight.
 
-![air-status live view: route bar, flight stats and a Braille map of the flown path](docs/screenshot.png)
+![air-status live view: route bar, flight stats and a Braille map of the flown path](https://raw.githubusercontent.com/max2697/air-status/main/docs/screenshot.png)
 
 <sub>Made-up flight. Regenerate with `.venv/bin/python scripts/screenshot.py`.</sub>
 
-## Setup
+## Install
+
+```bash
+pipx install air-status        # or: pip install air-status
+air-status
+```
+
+From a checkout, for development:
 
 ```bash
 python3 -m venv .venv
@@ -73,3 +80,16 @@ to `PROVIDERS` in `providers/__init__.py`.
 
 GitHub Actions (`.github/workflows/ci.yml`) runs the same lint plus tests on
 Python 3.9–3.14 for every push to `main` and every pull request.
+
+## Releasing
+
+1. Bump `__version__` in `src/air_status/__init__.py` and commit.
+2. Tag and push: `git tag v0.2.0 && git push origin v0.2.0`.
+
+`.github/workflows/release.yml` checks the tag matches the version, runs lint
+and tests, builds the package, publishes it to PyPI (trusted publishing, no
+token) and creates a GitHub release with the built files.
+
+## License
+
+MIT, see [LICENSE](LICENSE).

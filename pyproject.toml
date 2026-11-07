@@ -1,20 +1,39 @@
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "air-status"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Live in-flight status from airline Wi-Fi portals, with a terminal map and flight history"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.9"
 dependencies = ["rich>=13"]
+keywords = ["flight", "in-flight wifi", "terminal", "tui", "map", "aviation"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Utilities",
+]
+
+[project.urls]
+Homepage = "https://github.com/max2697/air-status"
+Issues = "https://github.com/max2697/air-status/issues"
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "ruff>=0.6"]
+dev = ["pytest>=8", "ruff>=0.6", "build>=1", "twine>=5"]
 
 [project.scripts]
 air-status = "air_status.cli:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "air_status.__version__" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
