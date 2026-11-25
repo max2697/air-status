@@ -2,6 +2,7 @@
 
 import time
 from collections.abc import Sequence
+from datetime import datetime
 from typing import Optional
 
 from rich import box
@@ -53,55 +54,87 @@ class Poller:
         self.fetched_at = time.time()
 
 
-def progress(status: FlightStatus) -> float:
-    """Share of the straight-line distance already covered, 0–100."""
-    o, d = status.origin, status.destination
-    total = distance_km(o.latitude, o.longitude, d.latitude, d.longitude)
-    left = distance_km(status.latitude, status.longitude, d.latitude, d.longitude)
-    return max(0.0, min(100.0, 100 * (1 - left / total))) if total else 0.0
+def progress(status: FlightStatus) -> Optional[float]:
+    """Use distance when available, or the elapsed share of the flight time."""
+    origin, destination, position = status.origin.coordinates, status.destination.coordinates, status.position
+    if origin and destination and position:
+        total = distance_km(*origin, *destination)
+        left = distance_km(*position, *destination)
+        fraction = 1 - left / total if total else 0.0
+    else:
+        fraction = status.elapsed_fraction
+        if fraction is None:
+            return None
+    return max(0.0, min(100.0, 100 * fraction))
 
 
-def route_bar(pct: float, frm: str, to: str, width: int = 40) -> Align:
-    pos = min(width - 1, int(width * pct / 100))
+def route_bar(pct: Optional[float], frm: str, to: str, width: int = 40) -> Align:
     line = Text()
     line.append(f" {frm} ", style="bold white on red")
-    line.append("━" * pos, style="red")
-    line.append("✈", style="bold yellow")
-    line.append("┄" * (width - 1 - pos), style="grey50")
+    if pct is None:
+        line.append("┄" * width, style="grey50")
+    else:
+        pos = min(width - 1, int(width * pct / 100))
+        line.append("━" * pos, style="red")
+        line.append("✈", style="bold yellow")
+        line.append("┄" * (width - 1 - pos), style="grey50")
     line.append(f" {to} ", style="bold white on red")
-    line.append(f"  {pct:.0f}%", style="bold")
+    if pct is not None:
+        line.append(f"  {pct:.0f}%", style="bold")
     return Align.center(line)
 
 
-def _local(dt) -> str:
-    return f"{dt.astimezone():%H:%M} local" if dt else "—"
+def _local(dt: datetime) -> str:
+    return f"{dt.astimezone():%H:%M} local"
 
 
 def _stats(st: FlightStatus) -> Table:
     vs = st.vertical_speed
     trend, color = ("▲ climbing", "green") if vs > 2 else ("▼ descending", "cyan") if vs < -2 else ("■ level", "grey62")
-    left_km = distance_km(st.latitude, st.longitude, st.destination.latitude, st.destination.longitude)
+    altitude, speed = st.altitude_ft, st.ground_speed_mph
+    position, destination = st.position, st.destination.coordinates
+    left_km = distance_km(*position, *destination) if position and destination else None
     m = st.minutes_to_land
     eta = st.expected_arrival
 
+    rows = (
+        (
+            "Altitude",
+            f"{altitude:,.0f} ft  [{color}]{trend}[/]" if altitude is not None else None,
+            "Speed",
+            f"{speed:.0f} mph  [grey62]{speed * MPH_TO_KMH:,.0f} km/h[/]" if speed is not None else None,
+        ),
+        (
+            "",
+            f"[grey62]{altitude * FT_TO_M:,.0f} m[/]" if altitude is not None else None,
+            "Phase",
+            f"[magenta]{st.phase}[/]" if st.phase else None,
+        ),
+        (
+            "Remaining",
+            f"{left_km:,.0f} km" if left_km is not None else None,
+            "Position",
+            f"{position[0]:.3f}, {position[1]:.3f}" if position else None,
+        ),
+        (
+            "Time to land",
+            f"[bold yellow]{m // 60}h {m % 60:02d}m[/]" if m is not None else None,
+            "ETA",
+            f"{_local(eta)}  [grey62]{eta:%H:%M} UTC[/]" if eta else None,
+        ),
+        ("Departed", _local(st.departure_time) if st.departure_time else None, "Wi-Fi", st.wifi or None),
+    )
     t = Table.grid(padding=(0, 3), expand=True)
     for style, justify in (("grey62", "right"), ("bold white", "left")) * 2:
         t.add_column(style=style, justify=justify)
-    t.add_row(
-        "Altitude",
-        f"{st.altitude_ft:,.0f} ft  [{color}]{trend}[/]",
-        "Speed",
-        f"{st.ground_speed_mph:.0f} mph  [grey62]{st.ground_speed_mph * MPH_TO_KMH:,.0f} km/h[/]",
-    )
-    t.add_row("", f"[grey62]{st.altitude_ft * FT_TO_M:,.0f} m[/]", "Phase", f"[magenta]{st.phase or '—'}[/]")
-    t.add_row("Remaining", f"{left_km:,.0f} km", "Position", f"{st.latitude:.3f}, {st.longitude:.3f}")
-    t.add_row(
-        "Time to land",
-        f"[bold yellow]{m // 60}h {m % 60:02d}m[/]" if m is not None else "—",
-        "ETA",
-        f"{_local(eta)}  [grey62]{eta:%H:%M} UTC[/]" if eta else "—",
-    )
-    t.add_row("Departed", _local(st.departure_time), "Wi-Fi", st.wifi or "—")
+    for left_label, left_value, right_label, right_value in rows:
+        if left_value is not None or right_value is not None:
+            t.add_row(
+                left_label if left_value is not None else "",
+                left_value or "",
+                right_label if right_value is not None else "",
+                right_value or "",
+            )
     return t
 
 
@@ -122,17 +155,21 @@ def render(poller: Poller, flight_map: FlightMap, map_rows: int = 18) -> Rendera
     st = poller.status
     if st is None:
         return Text(poller.error or "Connecting…")
+    percent = progress(st)
+    stats = _stats(st)
     parts: list[RenderableType] = [
         Text(),
-        route_bar(progress(st), st.origin.code, st.destination.code),
-        Text(),
-        _stats(st),
+        route_bar(percent, st.origin.code, st.destination.code),
         Text(),
     ]
-    if map_rows >= MIN_MAP_ROWS:
+    if stats.row_count:
+        parts.extend((stats, Text()))
+    has_map = percent is not None and st.origin.coordinates is not None and st.destination.coordinates is not None
+    if map_rows >= MIN_MAP_ROWS and has_map:
         try:
             m = flight_map.render(st, MAP_WIDTH, map_rows, poller.track)
-            parts.append(Panel(m, border_style="grey35", padding=0))
+            title = "Estimated position · elapsed flight time" if st.position is None else None
+            parts.append(Panel(m, title=title, border_style="grey35", padding=0))
         except Exception as e:  # map is optional: missing data, no network for the download…
             parts.append(Text(f"map unavailable: {e}", style="grey50"))
     parts.append(Align.center(_footer(poller)))
@@ -171,6 +208,7 @@ def history_table(histories: Sequence[FlightHistory]) -> Optional[Table]:
             if not rows:
                 continue
             a, b = rows[0], rows[-1]
+            max_altitude = max((r.altitude_ft for r in rows if r.altitude_ft is not None), default=None)
             t.add_row(
                 (a.departure_time or a.time).date().isoformat(),
                 a.flight_number,
@@ -178,7 +216,7 @@ def history_table(histories: Sequence[FlightHistory]) -> Optional[Table]:
                 a.aircraft_type,
                 str(len(rows)),
                 f"{a.time:%H:%M}–{b.time:%H:%M}",
-                f"{max(r.altitude_ft for r in rows):,.0f}",
+                f"{max_altitude:,.0f}" if max_altitude is not None else "—",
                 f"{path.stat().st_size / 1024:,.0f}K",
             )
     return t if t.row_count else None

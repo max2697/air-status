@@ -10,8 +10,9 @@ from typing import Optional
 from air_status.providers.aircanada import AirCanada
 from air_status.providers.american import American
 from air_status.providers.base import Provider
+from air_status.providers.southwest import Southwest
 
-PROVIDERS: dict[str, Provider] = {p.id: p for p in (AirCanada(), American())}
+PROVIDERS: dict[str, Provider] = {p.id: p for p in (AirCanada(), American(), Southwest())}
 AUTO = "auto"
 
 

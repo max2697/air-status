@@ -4,7 +4,7 @@ import json
 import math
 import urllib.request
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -12,7 +12,7 @@ from typing import Optional
 from rich.text import Text
 
 from air_status.braille import Canvas
-from air_status.geo import LatLon, bearing_deg, distance_km, great_circle
+from air_status.geo import LatLon, bearing_deg, distance_km, great_circle, great_circle_point
 from air_status.models import FlightStatus
 
 SOURCE_URL = "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/v5.1.2/geojson/{}.geojson"
@@ -93,7 +93,7 @@ def flown_legs(status: FlightStatus, track: Sequence[FlightStatus] = ()) -> list
     between the two known points, marked as estimated.
     """
     known: list[tuple[LatLon, Optional[datetime]]] = [((status.origin.latitude, status.origin.longitude), None)]
-    known += [((t.latitude, t.longitude), t.time) for t in track if t.time <= status.time]
+    known += [(pos, t.time) for t in track if t.time <= status.time and (pos := t.position) is not None]
     if known[-1][1] != status.time:
         known.append(((status.latitude, status.longitude), status.time))
 
@@ -170,24 +170,32 @@ class FlightMap:
     def render(self, status: FlightStatus, width: int, height: int, track: Sequence[FlightStatus] = ()) -> Text:
         """Map for one status, `width` x `height` terminal cells.
 
-        `track` is this flight's saved history; without it the flown path is estimated.
+        With no reported position, draw an estimate based on elapsed flight time.
         """
+        dep, dst = status.origin.coordinates, status.destination.coordinates
+        if dep is None or dst is None:
+            raise ValueError("airport coordinates unavailable")
+        here = status.position
+        estimated = here is None
+        if here is None:
+            fraction = status.elapsed_fraction
+            if fraction is None:
+                raise ValueError("flight progress unavailable")
+            here = great_circle_point(dep, dst, fraction)
+            status = replace(status, latitude=here[0], longitude=here[1])
+            track = ()
         dep_code, dst_code = status.origin.code, status.destination.code
-        key = (dep_code, dst_code, width, height)
+        key = (dep, dst, width, height)
         if key != self._key:
             self._setup(status, width, height)
             self._key = key
-        route_key = (key, status.time, len(track))
+        route_key = (key, status.time, here, len(track))
         if route_key != self._route_key:  # redraw the route only when data changes
             self._route = self._draw_route(status, track, width, height)
             self._route_key = route_key
         canvas = self._base.copy()
         canvas.overlay(self._route)  # route stays crisp over borders
         project = self._project
-        here = (status.latitude, status.longitude)
-        dep = (status.origin.latitude, status.origin.longitude)
-        dst = (status.destination.latitude, status.destination.longitude)
-
         for code, (lat, lon) in ((dep_code, dep), (dst_code, dst)):
             x, y = project(lat, lon)
             cx, cy = int(x) // 2, int(y) // 4
@@ -197,10 +205,14 @@ class FlightMap:
             canvas.text(lx, cy, label, "bold white on red")
 
         x, y = project(*here)
-        # Step a little along the heading and see which way that goes on screen
-        h = math.radians(heading_of(status))
-        step = 0.1  # degrees
-        ahead_lon = status.longitude + step * math.sin(h) / max(0.01, math.cos(math.radians(status.latitude)))
-        ax, ay = project(status.latitude + step * math.cos(h), ahead_lon)
-        canvas.text(int(x) // 2, int(y) // 4, plane_glyph(ax - x, ay - y), "bold yellow")
+        plane = "✈"
+        if not estimated:
+            # Step a little along the heading and see which way that goes on screen
+            h = math.radians(heading_of(status))
+            step = 0.1  # degrees
+            lat, lon = here
+            ahead_lon = lon + step * math.sin(h) / max(0.01, math.cos(math.radians(lat)))
+            ax, ay = project(lat + step * math.cos(h), ahead_lon)
+            plane = plane_glyph(ax - x, ay - y)
+        canvas.text(int(x) // 2, int(y) // 4, plane, "bold yellow")
         return canvas.to_text()

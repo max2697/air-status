@@ -1,13 +1,20 @@
+import json
+import ssl
 from datetime import datetime, timezone
+from io import BytesIO
+from urllib.error import URLError
 
 import pytest
 
 from air_status.providers import PROVIDERS, get_provider
+from air_status.providers import southwest as swa
 from air_status.providers.aircanada import AirCanada
+from air_status.tui import progress
 
 
 def test_registry():
     assert isinstance(PROVIDERS["aircanada"], AirCanada)
+    assert isinstance(get_provider("southwest"), swa.Southwest)
     with pytest.raises(ValueError):
         get_provider("nope")
 
@@ -213,3 +220,101 @@ def test_american_parse_uses_climb():
     assert get_provider("american").parse(reading).vertical_speed == 0.0
     reading["climb"] = {"verticalSpeed": -25.0}
     assert get_provider("american").parse(reading).vertical_speed == -25.0
+
+
+def test_southwest_fetch_and_history(monkeypatch, tmp_path):
+    requests = []
+    tracker = {
+        "flight_number": "9876",
+        "operating_carrier": "WN",
+        "departure_airport_code": "DAL",
+        "arrival_airport_code": "DEN",
+        "departure_utc_at": "2035-05-04T23:15:00Z",
+        "current_utc_at": "2035-05-05T00:15:00Z",
+        "arrival_utc_at": "2035-05-05T01:15:00Z",
+    }
+    stations = [
+        {"id": "DAL", "latitude": "32.847", "longitude": "-96.852"},
+        {"id": "DEN", "latitude": "39.856", "longitude": "-104.673"},
+    ]
+    responses = {
+        swa.CLIENT_CONTEXT: json.dumps({"clientId": "test-client", "routerId": "test-router", "sandboxId": 1}),
+        f"{swa.PORTAL}/": '<script src="/inflight/home-page/static/1.2.3/js/app.js"></script>',
+        swa.BOOTSTRAP: (
+            '"/api-keys":[function(require,module,exports){\nmodule.exports = {"prod":"test-key"};\n'
+            f'"/air/all-air-stations":[function(require,module,exports){{\nmodule.exports = {json.dumps(stations)};'
+        ),
+        f"{swa.API}/flight-data": json.dumps({"tail_number": "N987T"}),
+        f"{swa.API}/flight-tracker-data?tail_number=N987T": json.dumps({"data": tracker}),
+    }
+
+    def read(url, headers=None, body=None):
+        requests.append((url, headers, body))
+        return responses[url].encode()
+
+    monkeypatch.setattr(swa, "_read", read)
+    provider = swa.Southwest()
+    reading = provider.fetch()
+    assert provider.detect()
+    assert requests[3][2] == {"client_id": "test-client", "router_id": "test-router", "sandbox_id": 1}
+    assert requests[4][1]["X-Api-Key"] == "test-key"
+    assert reading == {
+        "tail_number": "N987T",
+        **tracker,
+        "airport_coordinates": {"DAL": [32.847, -96.852], "DEN": [39.856, -104.673]},
+    }
+
+    status = provider.parse(reading)
+    assert status.provider == "southwest"
+    assert status.flight_number == "WN9876"
+    assert (status.origin.code, status.destination.code) == ("DAL", "DEN")
+    assert status.origin.coordinates == (32.847, -96.852)
+    assert status.destination.coordinates == (39.856, -104.673)
+    assert status.position is status.altitude_ft is status.ground_speed_mph is None
+    assert status.expected_arrival == datetime(2035, 5, 5, 1, 15, tzinfo=timezone.utc)
+    assert status.minutes_to_land == 60
+    assert progress(status) == 50
+
+    history = provider.history(tmp_path)
+    assert history.save(reading)
+    assert not provider.history(tmp_path).save(reading)
+    (path,) = history.files()
+    assert path.name == "2035-05-04_WN9876_DAL-DEN.jsonl"
+    assert history.load(path) == [status]
+
+    old_reading = {"tail_number": "N987T", **tracker}
+    assert provider.parse(old_reading).origin.coordinates is None
+    assert progress(provider.parse(old_reading)) == 50
+
+
+def test_southwest_detect_requires_a_current_flight(monkeypatch):
+    provider = swa.Southwest()
+    monkeypatch.setattr(provider, "fetch", lambda: dict.fromkeys(swa.TRACKER_FIELDS))
+    assert not provider.detect()
+
+
+@pytest.mark.parametrize(
+    ("url", "verify_code", "retry"),
+    [(swa.CLIENT_CONTEXT, 20, True), (swa.CLIENT_CONTEXT, 62, False), (swa.PORTAL, 20, False)],
+)
+def test_southwest_downloads_intermediate_only_for_missing_router_issuer(monkeypatch, url, verify_code, retry):
+    error = ssl.SSLCertVerificationError()
+    error.verify_code = verify_code
+    fallback = object()
+    calls = []
+
+    def open_url(request, *, timeout, context=None):
+        calls.append(context)
+        if context is None:
+            raise URLError(error)
+        return BytesIO(b"{}")
+
+    monkeypatch.setattr(swa.urllib.request, "urlopen", open_url)
+    monkeypatch.setattr(swa, "_starlink_tls", lambda: fallback)
+    if retry:
+        assert swa._read(url) == b"{}"
+        assert calls == [None, fallback]
+    else:
+        with pytest.raises(URLError):
+            swa._read(url)
+        assert calls == [None]

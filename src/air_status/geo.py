@@ -1,6 +1,7 @@
 """Small spherical-earth helpers."""
 
 import math
+from collections.abc import Iterable
 
 EARTH_RADIUS_KM = 6371
 
@@ -24,13 +25,21 @@ def bearing_deg(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 
 def great_circle(lat1: float, lon1: float, lat2: float, lon2: float, n: int = 200) -> list[LatLon]:
     """n+1 evenly spaced (lat, lon) points along the shortest path between two places."""
-    p1, l1, p2, l2 = map(math.radians, (lat1, lon1, lat2, lon2))
+    return _great_circle_points((lat1, lon1), (lat2, lon2), (step / n for step in range(n + 1)))
+
+
+def great_circle_point(start: LatLon, end: LatLon, fraction: float) -> LatLon:
+    """A point at the given fraction along the shortest path."""
+    return _great_circle_points(start, end, (fraction,))[0]
+
+
+def _great_circle_points(start: LatLon, end: LatLon, fractions: Iterable[float]) -> list[LatLon]:
+    p1, l1, p2, l2 = map(math.radians, (*start, *end))
     a = [math.cos(p1) * math.cos(l1), math.cos(p1) * math.sin(l1), math.sin(p1)]
     b = [math.cos(p2) * math.cos(l2), math.cos(p2) * math.sin(l2), math.sin(p2)]
     d = math.acos(max(-1.0, min(1.0, sum(i * j for i, j in zip(a, b)))))
     points = []
-    for step in range(n + 1):
-        t = step / n
+    for t in fractions:
         if d < 1e-9:
             v = a
         else:

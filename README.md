@@ -8,6 +8,14 @@ saved history of every flight.
 
 <sub>Made-up flight. Regenerate with `python scripts/screenshot.py`.</sub>
 
+## Supported airlines
+
+| Airline | Provider ID | Supported in-flight Wi-Fi |
+| --- | --- | --- |
+| Air Canada | `aircanada` | Gogo / Intelsat |
+| American Airlines | `american` | Viasat |
+| Southwest Airlines | `southwest` | Starlink |
+
 ## Install
 
 ```bash
@@ -26,14 +34,22 @@ pip install -e '.[dev]'
 ## Use
 
 ```bash
-air-status                               # live view, airline detected from the Wi-Fi, saves history
-air-status live -p american              # pick the airline: aircanada, american
+air-status                              # detect the airline from Wi-Fi, show live status, and save history
+air-status live -p southwest            # select Southwest Airlines
 air-status live -p aircanada --every 10  # refresh every 10 s
-air-status history                       # list saved flights
+air-status history                      # list saved flights
 ```
 
 Run it in a real terminal for the live full-screen view. In a plain output window
 (e.g. PyCharm's Run tab) it prints one frame per update instead.
+
+On Southwest aircraft equipped with Starlink, the onboard tracker provides the
+flight number, route, departure time, and ETA. The progress bar uses the elapsed
+flight time, and the map uses the same progress to place an estimated position
+along the shortest path between the airports. Altitude, speed, and GPS position
+are unavailable with this feed.
+If the Starlink router omits its intermediate TLS certificate, Air Status
+downloads it from IdenTrust once per run.
 
 Files go in the current folder (change with `--data-dir`):
 
@@ -45,6 +61,7 @@ Files go in the current folder (change with `--data-dir`):
   locations (looked up once from the portal) in the same change-only format.
   Its feed has no vertical speed, so climb/descent is worked out from the
   altitude change over the last minute (and saved too).
+  Southwest stores flight and timing fields from the Starlink tracker in the same format.
 - `mapdata/` — map outlines from [Natural Earth](https://www.naturalearthdata.com/),
   downloaded on first run.
 
